@@ -9,11 +9,12 @@
 import UIKit
 import Firebase
 import JSQMessagesViewController
-
+import Photos
 
 
 class MessagesViewController: JSQMessagesViewController{
     
+  
     var topic : String!
     var chats: Chats? {
         didSet {
@@ -22,6 +23,11 @@ class MessagesViewController: JSQMessagesViewController{
         }
     }
     
+    
+    private var updatedMessageRefHandle: FIRDatabaseHandle?
+    var storageRef = FIRStorage.storage().reference()
+    private let imageURLNotSetKey = "NOTSET"
+    private var photoMessageMap = [String: JSQPhotoMediaItem]()
     
     var messageRef: FIRDatabaseReference!
     private var newMessageRefHandle: FIRDatabaseHandle?
@@ -33,7 +39,15 @@ class MessagesViewController: JSQMessagesViewController{
 
     
     
-    
+    deinit {
+        if let refHandle = newMessageRefHandle {
+            messageRef.removeObserver(withHandle: refHandle)
+        }
+        
+        if let refHandle = updatedMessageRefHandle {
+            messageRef.removeObserver(withHandle: refHandle)
+        }
+    }
     override func viewDidLoad() {
         super.viewDidLoad()
         messageRef = FIRDatabase.database().reference()
@@ -95,6 +109,25 @@ class MessagesViewController: JSQMessagesViewController{
         }
         return cell
     }
+    @IBAction func logOut(_ sender: AnyObject) {
+       
+        let storyboardObj = UIStoryboard(name: "Main", bundle: nil)
+        let loginViewController = storyboardObj.instantiateInitialViewController() as! LoginViewController
+        let delegate =  UIApplication.shared.delegate as! AppDelegate
+        
+        var logoutAlert = UIAlertController(title: "Logout", message: "Are you sure you want to logout?", preferredStyle: UIAlertControllerStyle.alert)
+        
+        logoutAlert.addAction(UIAlertAction(title: "Ok", style: .default, handler: { (action: UIAlertAction!) in
+            delegate.window?.rootViewController = loginViewController
+        }))
+        
+        logoutAlert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { (action: UIAlertAction!) in
+        }))
+        present(logoutAlert, animated: true, completion: nil)
+        
+        
+    }
+    
     override func didPressSend(_ button: UIButton!, withMessageText text: String!, senderId: String!, senderDisplayName: String!, date: Date!) {
         
         let chatsRef = messageRef.child("chats").child(topic!).child("messages")
@@ -148,15 +181,47 @@ class MessagesViewController: JSQMessagesViewController{
                 
                 let date = dateFormatter.date(from: dateData)
                 
-                self.addMessage(withId: id, name: name, text: text, timeStamp: date!)
-               // self.add
+            self.addMessage(withId: id, name: name, text: text, timeStamp: date!)
+                
+                
+                    // self.add
                 
                 // 5
                 self.finishReceivingMessage()
-            } else {
+            }
+            else if let id = messageData["senderId"] as! String!,
+                let photoURL = messageData["photoURL"] as! String!,
+                let dispName = messageData["displayName"] as! String!
+            { // 1
+                // 2
+                if let mediaItem = JSQPhotoMediaItem(maskAsOutgoing: id == self.senderId) {
+                    // 3
+                    self.addPhotoMessage(withId: id, key: snapshot.key, mediaItem: mediaItem, displayName: dispName)
+                    // 4
+                    if photoURL.hasPrefix("gs://") {
+                        self.fetchImageDataAtURL(photoURL, forMediaItem: mediaItem, clearsPhotoMessageMapOnSuccessForKey: nil)
+                    }
+                }
+            }
+            
+            else {
                 print("Error! Could not decode message data")
             }
         })
+        
+        updatedMessageRefHandle = messageRef.child("chats").child(topic!).child("messages").observe(.childChanged, with: { (snapshot) in
+            let key = snapshot.key
+            let messageData = snapshot.value as! Dictionary<String, String> // 1
+            
+            if let photoURL = messageData["photoURL"] as String! { // 2
+                // The photo has been updated.
+                if let mediaItem = self.photoMessageMap[key] { // 3
+                    self.fetchImageDataAtURL(photoURL, forMediaItem: mediaItem, clearsPhotoMessageMapOnSuccessForKey: key) // 4
+                }
+            }
+        })
+        
+        
     }
     
     override func collectionView(_ collectionView: JSQMessagesCollectionView!, attributedTextForMessageBubbleTopLabelAt indexPath: IndexPath!) -> NSAttributedString! {
@@ -181,9 +246,88 @@ class MessagesViewController: JSQMessagesViewController{
     }
     
     
+    func sendPhotoMessage() -> String? {
+        let itemRef = messageRef.child("chats").child(topic!).child("messages").childByAutoId()
+        
+        let messageItem = [
+            "photoURL": imageURLNotSetKey,
+            "senderId": senderId!,
+            "timestamp" : "",
+            "message" : "",
+            "from" : "",
+            "displayName":senderDisplayName!
+            ]
+        
+        itemRef.setValue(messageItem)
+        
+        JSQSystemSoundPlayer.jsq_playMessageSentSound()
+        
+        finishSendingMessage()
+        return itemRef.key
+    }
     
+    func setImageURL(_ url: String, forPhotoMessageWithKey key: String) {
+        let itemRef = messageRef.child("chats").child(topic!).child("messages").child(key)
+        itemRef.updateChildValues(["photoURL": url])
+    }
     
+    override func didPressAccessoryButton(_ sender: UIButton) {
+        let picker = UIImagePickerController()
+        picker.delegate = self
+        if (UIImagePickerController.isSourceTypeAvailable(UIImagePickerControllerSourceType.camera)) {
+            picker.sourceType = UIImagePickerControllerSourceType.camera
+        } else {
+            picker.sourceType = UIImagePickerControllerSourceType.photoLibrary
+        }
+        
+        present(picker, animated: true, completion:nil)
+    }
     
+    private func addPhotoMessage(withId id: String, key: String, mediaItem: JSQPhotoMediaItem , displayName: String) {
+        if let message = JSQMessage(senderId: id, displayName: displayName, media: mediaItem) {
+            messages.append(message)
+            
+            if (mediaItem.image == nil) {
+                photoMessageMap[key] = mediaItem
+            }
+            
+            collectionView.reloadData()
+        }
+    }
+    private func fetchImageDataAtURL(_ photoURL: String, forMediaItem mediaItem: JSQPhotoMediaItem, clearsPhotoMessageMapOnSuccessForKey key: String?) {
+        // 1
+        let storageRef = FIRStorage.storage().reference(forURL: photoURL)
+        
+        // 2
+        storageRef.data(withMaxSize: INT64_MAX){ (data, error) in
+            if let error = error {
+                print("Error downloading image data: \(error)")
+                return
+            }
+            
+            // 3
+            storageRef.metadata(completion: { (metadata, metadataErr) in
+                if let error = metadataErr {
+                    print("Error downloading metadata: \(error)")
+                    return
+                }
+                
+                // 4
+                if (metadata?.contentType == "image/gif") {
+                 //   mediaItem.image = UIImage.(data!)
+                } else {
+                    mediaItem.image = UIImage.init(data: data!)
+                }
+                self.collectionView.reloadData()
+                
+                // 5
+                guard key != nil else {
+                    return
+                }
+                self.photoMessageMap.removeValue(forKey: key!)
+            })
+        }
+    }
     
     /*
      
@@ -199,3 +343,72 @@ class MessagesViewController: JSQMessagesViewController{
     */
 
 }
+extension MessagesViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func imagePickerController(_ picker: UIImagePickerController,
+                               didFinishPickingMediaWithInfo info: [String : Any]) {
+        
+        picker.dismiss(animated: true, completion:nil)
+        
+        // 1
+        if let photoReferenceUrl = info[UIImagePickerControllerReferenceURL] as? URL {
+            // Handle picking a Photo from the Photo Library
+            // 2
+            let assets = PHAsset.fetchAssets(withALAssetURLs: [photoReferenceUrl], options: nil)
+            let asset = assets.firstObject
+            
+            // 3
+            if let key = sendPhotoMessage() {
+                // 4
+                asset?.requestContentEditingInput(with: nil, completionHandler: { (contentEditingInput, info) in
+                    let imageFileURL = contentEditingInput?.fullSizeImageURL
+                    
+                    // 5
+                    let path = "\(self.senderId!)/\(Int(Date.timeIntervalSinceReferenceDate * 1000))/\(photoReferenceUrl.lastPathComponent)"
+                    
+                    // 6
+                    self.storageRef.child(path).putFile(imageFileURL!, metadata: nil) { (metadata, error) in
+                        if let error = error {
+                            print("Error uploading photo: \(error.localizedDescription)")
+                            return
+                        }
+                        // 7
+                        self.setImageURL(self.storageRef.child((metadata?.path)!).description, forPhotoMessageWithKey: key)
+                    }
+                })
+            }
+        } else {
+            let image = info[UIImagePickerControllerOriginalImage] as! UIImage
+            // 2
+            if let key = sendPhotoMessage() {
+                // 3
+                let imageData = UIImageJPEGRepresentation(image, 1.0)
+                // 4
+                let imagePath = senderId! + "/\(Int(Date.timeIntervalSinceReferenceDate * 1000)).jpg"
+                // 5
+                let metadata = FIRStorageMetadata()
+                metadata.contentType = "image/jpeg"
+                // 6
+                storageRef.child(imagePath).put(imageData!, metadata: metadata) { (metadata, error) in
+                    if let error = error {
+                        print("Error uploading photo: \(error)")
+                        return
+                    }
+                    // 7
+                    self.setImageURL(self.storageRef.child((metadata?.path)!).description, forPhotoMessageWithKey: key)
+                }
+            }
+        }
+    }
+    
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true, completion:nil)
+    }
+    
+    
+    
+}
+
+
+
+
+

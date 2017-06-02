@@ -12,7 +12,7 @@ class AddChatTableViewCell: UITableViewCell {
 
     @IBOutlet var lblUserName: UILabel!
     @IBOutlet var imgUserImage: UIImageView!
-    @IBOutlet var lblPhoneNo: UILabel!
+    var lblPhoneNo: String!
     
     override func awakeFromNib() {
         super.awakeFromNib()

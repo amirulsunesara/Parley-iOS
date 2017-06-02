@@ -8,8 +8,8 @@
 
 import UIKit
 import Firebase
-
-class AddChatViewController: UIViewController,UITableViewDelegate,UITableViewDataSource {
+import NVActivityIndicatorView
+class AddChatViewController:UIViewController,UITableViewDelegate,UITableViewDataSource, NVActivityIndicatorViewable{
 
     @IBOutlet var txtChatName: UITextField!
     var userId : String!
@@ -78,6 +78,23 @@ class AddChatViewController: UIViewController,UITableViewDelegate,UITableViewDat
         
     }
 
+    @IBAction func logOut(_ sender: AnyObject) {
+        
+        let storyboardObj = UIStoryboard(name: "Main", bundle: nil)
+        let loginViewController = storyboardObj.instantiateInitialViewController() as! LoginViewController
+        let delegate =  UIApplication.shared.delegate as! AppDelegate
+        
+        var logoutAlert = UIAlertController(title: "Logout", message: "Are you sure you want to logout?", preferredStyle: UIAlertControllerStyle.alert)
+        
+        logoutAlert.addAction(UIAlertAction(title: "Ok", style: .default, handler: { (action: UIAlertAction!) in
+             delegate.window?.rootViewController = loginViewController
+        }))
+        
+        logoutAlert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { (action: UIAlertAction!) in
+        }))
+        present(logoutAlert, animated: true, completion: nil)
+        
+    }
     
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
@@ -102,7 +119,8 @@ func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> U
         let cellIdentifier = "chatCell"
         let cell = tblChats.dequeueReusableCell(withIdentifier: cellIdentifier) as! AddChatTableViewCell
     cell.lblUserName.text = (arrUsers[indexPath.row]["displayName"] as! String)
-    cell.lblPhoneNo.text = (arrUsers[indexPath.row]["userId"] as! String)
+    cell.imgUserImage.layer.cornerRadius = 10
+    cell.lblPhoneNo = (arrUsers[indexPath.row]["userId"] as! String)
     let id = arrUsers[indexPath.row]["userId"] as! String
     cell.imgUserImage.image = (dictPhotos[id] as? UIImage)
         return cell
@@ -128,7 +146,7 @@ func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> U
     
         }
     @IBAction func addChat(_ sender: AnyObject) {
-        
+        startAnimating()
         if txtChatName.text != "" && selectedRowCount > 0 {
         
         self.databaseRef.child("users").child(userId).child("chats").childByAutoId().setValue(txtChatName.text!)
@@ -141,7 +159,7 @@ func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> U
             {
             
                let currentCell = tblChats.cellForRow(at: row) as! AddChatTableViewCell
-                let selectedId = currentCell.lblPhoneNo.text!
+                let selectedId = currentCell.lblPhoneNo!
                 self.databaseRef.child("users").child(selectedId).child("chats").childByAutoId().setValue(chatName)
                 
                 getUsers.append(selectedId as NSString)
@@ -151,13 +169,14 @@ func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> U
            
             self.databaseRef.child("chats").child(chatName).child("members").setValue(getUsers)
         self.databaseRef.child("chats").child(chatName).child("topic").setValue(chatName)
-        performSegue(withIdentifier: "chatAdded", sender: nil)
+       stopAnimating()
+    performSegue(withIdentifier: "chatAdded", sender: nil)
 
         
         }
         else{
-        
-        
+        stopAnimating()
+        createAlert(title: "", message: "Please Enter Chat Name or Select People")
  
         }
         

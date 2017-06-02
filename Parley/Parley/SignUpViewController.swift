@@ -8,12 +8,11 @@
 
 import UIKit
 import Firebase
-class SignUpViewController: UIViewController, UINavigationControllerDelegate, UIImagePickerControllerDelegate{
+import NVActivityIndicatorView
+class SignUpViewController: UIViewController, UINavigationControllerDelegate, UIImagePickerControllerDelegate,NVActivityIndicatorViewable{
     
     var users : Users?
    
-   
-    
     @IBOutlet var imageView: UIImageView!
     var ref : FIRDatabaseReference!
     var storageRef : FIRStorageReference!
@@ -33,6 +32,7 @@ class SignUpViewController: UIViewController, UINavigationControllerDelegate, UI
 
     @IBAction func chooseImage(_ sender: AnyObject) {
     
+        sender.setTitle("", for: .normal)
         let imagePicker = UIImagePickerController()
         imagePicker.delegate = self
         imagePicker.sourceType = UIImagePickerControllerSourceType.photoLibrary;
@@ -88,14 +88,16 @@ class SignUpViewController: UIViewController, UINavigationControllerDelegate, UI
     }
 
     @IBAction func completeSignUp(_ sender: UIButton) {
+        startAnimating()
         if txtDisplayName.text == ""{
-            
+            stopAnimating()
             createAlert(title: "" , message: "Please Enter Display Name")
+            
         }
         else if imageView.image == nil
-        {
+        { stopAnimating()
              createAlert(title: "" , message: "Please Select Display Image")
-        
+           
         }
         else
         {
@@ -115,6 +117,7 @@ class SignUpViewController: UIViewController, UINavigationControllerDelegate, UI
             
             
             photoRef.put(UIImageJPEGRepresentation(imageView.image!, 0.8)!, metadata: metaDataa)
+             stopAnimating()
             performSegue(withIdentifier: "completeSignUp", sender: nil)
         }
         }

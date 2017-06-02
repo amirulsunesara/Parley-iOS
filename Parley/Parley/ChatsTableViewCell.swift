@@ -10,6 +10,8 @@ import UIKit
 
 class ChatsTableViewCell: UITableViewCell {
 
+    @IBOutlet var lblFirstChar: UILabel!
+    @IBOutlet var viewLabel: UIView!
     @IBOutlet var txtChatName: UILabel!
     var chatId : String!
     override func awakeFromNib() {

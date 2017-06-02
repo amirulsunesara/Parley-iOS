@@ -8,7 +8,9 @@
 
 import UIKit
 import Firebase
-class ChatsViewController: UIViewController,UITableViewDelegate,UITableViewDataSource {
+import NVActivityIndicatorView
+
+class ChatsViewController: UIViewController,UITableViewDelegate,UITableViewDataSource, NVActivityIndicatorViewable{
     @IBOutlet var tblChat: UITableView!
     var storageRef : FIRStorageReference!
     var databaseRef : FIRDatabaseReference!
@@ -52,6 +54,25 @@ class ChatsViewController: UIViewController,UITableViewDelegate,UITableViewDataS
         // Do any additional setup after loading the view.
     }
 
+    @IBAction func logOut(_ sender: AnyObject) {
+        
+        let storyboardObj = UIStoryboard(name: "Main", bundle: nil)
+        let loginViewController = storyboardObj.instantiateInitialViewController() as! LoginViewController
+        let delegate =  UIApplication.shared.delegate as! AppDelegate
+        
+        var logoutAlert = UIAlertController(title: "Logout", message: "Are you sure you want to logout?", preferredStyle: UIAlertControllerStyle.alert)
+        
+        logoutAlert.addAction(UIAlertAction(title: "Ok", style: .default, handler: { (action: UIAlertAction!) in
+            
+            delegate.window?.rootViewController = loginViewController
+            
+        }))
+        
+        logoutAlert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { (action: UIAlertAction!) in
+      }))
+        present(logoutAlert, animated: true, completion: nil)
+        
+    }
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
@@ -106,8 +127,14 @@ class ChatsViewController: UIViewController,UITableViewDelegate,UITableViewDataS
         let chat = chats[indexPath.row]
         let chatName = chat.first?.value
         
-        cell.txtChatName.text = chatName
-        cell.chatId = chat.first?.key
+        
+
+ 
+        cell.viewLabel.layer.cornerRadius = 15
+  
+        cell.txtChatName.text = chatName!
+        let first = String(describing: (chatName?.characters.first)!).capitalized
+        cell.lblFirstChar.text = first
         
         
         return cell
@@ -116,7 +143,7 @@ class ChatsViewController: UIViewController,UITableViewDelegate,UITableViewDataS
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         
-        
+        startAnimating()
         let chat = chats[indexPath.row]
         selectedChatId = chat.first?.key
         selectedChatName = chat.first?.value
@@ -136,6 +163,7 @@ class ChatsViewController: UIViewController,UITableViewDelegate,UITableViewDataS
     }
     func goToChatInterface()
     {
+        stopAnimating()
     performSegue(withIdentifier: "toChatInterface", sender: nil)
     
     }

@@ -8,7 +8,8 @@
 
 import UIKit
 import Firebase
-class LoginViewController: UIViewController {
+import NVActivityIndicatorView
+class LoginViewController: UIViewController,NVActivityIndicatorViewable{
 
     @IBOutlet var txtPassword: UITextField!
     @IBOutlet var txtPhoneNumber: UITextField!
@@ -20,7 +21,7 @@ class LoginViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         ref = FIRDatabase.database().reference()
-        
+  
     }
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if segue.identifier == "goToSignUp"{
@@ -47,12 +48,13 @@ class LoginViewController: UIViewController {
     }
     
     @IBAction func Login(_ sender: AnyObject) {
-        
-        
+        if txtPassword.text != "" && txtPhoneNumber.text != "" {
+        startAnimating()
         self.ref.child("users").child(txtPhoneNumber.text!).child("password").observeSingleEvent(of: .value, with: { (snapshot) in
             if snapshot.value as? String == self.txtPassword.text!{
                 
                 self.userId = self.txtPhoneNumber.text!
+          self.stopAnimating()
                 self.performSegue(withIdentifier: "login", sender: nil)
             }
             else {
@@ -66,21 +68,30 @@ class LoginViewController: UIViewController {
         }) { (error) in
             print(error.localizedDescription)
         }
-     
+    }
+        else {
+        
+            self.createAlert(title: "", message: "Please enter Username/Password")
+        }
+        
         
     }
+    
    
     @IBAction func Register(_ sender: UIButton) {
-   
+        
+        if txtPhoneNumber.text != "" && txtPassword.text != ""{
+        startAnimating()
         self.ref.child("users").observeSingleEvent(of: .value, with: { (snapshot) in
                 // Get user value
             if snapshot.hasChild(self.txtPhoneNumber.text!){
-                     self.createAlert(title: "", message: "User Already Exist")
-        
+                self.stopAnimating()
+                self.createAlert(title: "", message: "User Already Exist")
+                
             
             }
             else {
-                
+                self.stopAnimating()
                 self.createUser()
                 self.performSegue(withIdentifier: "goToSignUp", sender: nil)
               //  let storyBoardObj = UIStoryboard(name: "Main", bundle: nil)
@@ -96,7 +107,12 @@ class LoginViewController: UIViewController {
         }) { (error) in
             print(error.localizedDescription)
         }
-    
+        }
+        else{
+        
+        self.createAlert(title: "", message: "Please enter Username/Password")
+        
+        }
 
 
     

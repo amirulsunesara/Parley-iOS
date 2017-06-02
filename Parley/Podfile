@@ -2,6 +2,7 @@
 # platform :ios, '9.0'
 
 target 'Parley' do
+  pod 'NVActivityIndicatorView'
   pod 'Firebase/Storage'
   pod 'Firebase/Auth'
   pod 'Firebase/Database'
